@@ -4,6 +4,9 @@ package edu.northeastern.alarmyquest;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
+import android.app.TimePickerDialog;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,14 +17,17 @@ import android.widget.AdapterView;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.TimePicker;
 import android.widget.Toast;
 
 import com.airbnb.lottie.LottieAnimationView;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 import edu.northeastern.alarmyquest.adapter.CustomSpinnerAdapter;
+import edu.northeastern.alarmyquest.utils.AlarmHelper;
 
 public class MainActivity extends AppCompatActivity {
     private Spinner spinner;
@@ -33,17 +39,20 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvWeek1, tvWeek2, tvWeek3, tvWeek4, tvWeek5, tvWeek6, tvWeek7;
     private int[] textviewStates = new int[7]; // 保存 TextView 状态的列表
     private boolean isShock = true;
-    private ImageView imageView;
     private LottieAnimationView lav;
     private int currentAnimationIndex;
-
+    private static final String PREFS_NAME = "MyPrefs";
+    private static final String KEY_TIME = "time";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
 
-        tvTime = (TextView) findViewById(R.id.tv_time);
+        MainData.mediaPlayer = MediaPlayer.create(this, R.raw.bittersweet);
+
+
+        initTime();
 
         initLottie();
 
@@ -53,6 +62,42 @@ public class MainActivity extends AppCompatActivity {
         initSpinner();
 
 
+    }
+
+    private void initTime() {
+        tvTime = (TextView) findViewById(R.id.tv_time);
+        // 恢复保存的内容
+        restoreTime();
+        // 设置 TextView 的点击事件，点击后弹出时间选择器
+        tvTime.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showTimePickerDialog();
+            }
+        });
+    }
+
+    // 显示时间选择器
+    private void showTimePickerDialog() {
+        final Calendar calendar = Calendar.getInstance();
+        int hour = calendar.get(Calendar.HOUR_OF_DAY);
+        int minute = calendar.get(Calendar.MINUTE);
+
+        TimePickerDialog timePickerDialog = new TimePickerDialog(this,
+                new TimePickerDialog.OnTimeSetListener() {
+                    @Override
+                    public void onTimeSet(TimePicker view, int hourOfDay, int minute) {
+                        // 处理用户选择的时间
+                        String selectedTime = String.format("%02d:%02d", hourOfDay, minute);
+                        tvTime.setText(selectedTime);
+                        // 保存内容
+                        saveTime();
+                        String time = tvTime.getText().toString().trim();
+                        AlarmHelper.setWeeklyAlarm(MainActivity.this, time,textviewStates);
+                    }
+                }, hour, minute, true); // true 表示使用 24 小时制
+
+        timePickerDialog.show();
     }
 
     private void initLottie() {
@@ -114,6 +159,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void toggleTextColor(TextView textView, int index) {
+        String time = tvTime.getText().toString().trim();
+
         if (textviewStates[index] == 0) {
             // 当前状态为未选中，切换为选中状态
             int color = ContextCompat.getColor(this, R.color.MainColor);
@@ -125,6 +172,9 @@ public class MainActivity extends AppCompatActivity {
             textView.setTextColor(color);
             textviewStates[index] = 0;
         }
+        AlarmHelper.setWeeklyAlarm(MainActivity.this, time,textviewStates);
+
+
     }
     private void initSpinner() {
         // 设置状态栏颜色为黑色
@@ -152,9 +202,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 adapter.stop();
+                String rawResourceName = mediaPlayerList.get(position);
+                int resId = getResources().getIdentifier(rawResourceName, "raw", getPackageName());
+                MainData.mediaPlayer = MediaPlayer.create(MainActivity.this, resId);
             }
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
+
             }
         });
     }
@@ -165,5 +219,23 @@ public class MainActivity extends AppCompatActivity {
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
             window.setStatusBarColor(color);
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+    }
+    private void saveTime() {
+        SharedPreferences preferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putString(KEY_TIME, tvTime.getText().toString());
+        editor.apply();
+    }
+
+    private void restoreTime() {
+        SharedPreferences preferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String savedTime = preferences.getString(KEY_TIME, "7:00");
+        tvTime.setText(savedTime);
     }
 }
